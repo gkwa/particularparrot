@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multi-Timer Application</title>
+  </head>
+  <body>
+    <div class="container">
+      <h1>⏱️ Multiple Timers</h1>
+
+      <div class="dashboards-section">
+        <h2>Dashboard Management</h2>
+        <div class="dashboard-input-group">
+          <input
+            type="text"
+            id="dashboardName"
+            placeholder="e.g., Baking, Cooking, Workout"
+            class="dashboard-input"
+          />
+          <button class="btn-create" id="createDashboardBtn">Create Dashboard</button>
+        </div>
+        <div id="dashboardsContainer"></div>
+      </div>
+
+      <div class="create-timer-section">
+        <h2>Create a New Timer</h2>
+        <div class="mode-selector">
+          <span style="color: #666; font-weight: 600">Mode:</span>
+          <button class="mode-btn active" id="modeCountdown">⏱️ Countdown</button>
+          <button class="mode-btn" id="modeCountup">⏲️ Count Up</button>
+        </div>
+        <div id="presetSection">
+          <p>Quick presets:</p>
+          <div class="preset-buttons">
+            <button class="preset-btn" onclick="window.app.setPreset(1)">1 min</button>
+            <button class="preset-btn" onclick="window.app.setPreset(2)">2 mins</button>
+            <button class="preset-btn" onclick="window.app.setPreset(5)">5 mins</button>
+            <button class="preset-btn" onclick="window.app.setPreset(10)">10 mins</button>
+            <button class="preset-btn" onclick="window.app.setPreset(15)">15 mins</button>
+            <button class="preset-btn" onclick="window.app.setPreset(30)">30 mins</button>
+          </div>
+        </div>
+        <div id="countdownInputs" class="input-group">
+          <div class="input-field">
+            <label for="label">Timer Label</label>
+            <input type="text" id="label" placeholder="e.g., Cooking, Laundry, Study" />
+          </div>
+          <div class="input-field">
+            <label for="hours">Hours</label>
+            <input type="number" id="hours" value="0" min="0" max="23" />
+          </div>
+          <div class="input-field">
+            <label for="minutes">Minutes</label>
+            <input type="number" id="minutes" value="5" min="0" max="59" />
+          </div>
+          <div class="input-field">
+            <label for="seconds">Seconds</label>
+            <input type="number" id="seconds" value="0" min="0" max="59" />
+          </div>
+          <button class="btn-create" id="createTimerBtn">Create Timer</button>
+        </div>
+        <div id="countupInputs" class="input-group">
+          <div class="input-field">
+            <label for="labelCountup">Timer Label</label>
+            <input type="text" id="labelCountup" placeholder="e.g., Stopwatch, Elapsed time" />
+          </div>
+          <div style="display: flex; gap: 8px; align-items: flex-end">
+            <button class="btn-create" id="createCountupBtn" style="flex: 1">Create Counter</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="timersContainer"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
