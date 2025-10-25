@@ -1,23 +1,23 @@
 /**
- * Application - Main orchestrator
- * Follows Dependency Inversion: depends on interfaces, not concrete implementations
- * Manages dependency injection and application lifecycle
+ * Application - Orchestrator class
+ * Implements Dependency Injection and ties all services together
+ * Exposes public API for the UI to interact with
  */
 
-import {
-  ITimerService,
-  IDashboardService,
-  IDashboard,
-  IDashboardObserver,
-  ITimerObserver,
-  TimerState,
-} from "./types/index"
 import { TimerService } from "./services/TimerService"
 import { AudioService } from "./services/AudioService"
 import { StorageService } from "./services/StorageService"
 import { DashboardService } from "./services/DashboardService"
 import { UIRenderer } from "./ui/UIRenderer"
 import { FormHandler } from "./ui/FormHandler"
+import type {
+  ITimerService,
+  IDashboardService,
+  ITimerObserver,
+  IDashboardObserver,
+  TimerState,
+  IDashboard,
+} from "./types/index"
 
 export class Application implements IDashboardObserver, ITimerObserver {
   private timerService: ITimerService
@@ -59,6 +59,10 @@ export class Application implements IDashboardObserver, ITimerObserver {
         this.timerService.startTimer(id)
         this.renderUI()
       },
+      pauseTimer: (id: number) => {
+        this.timerService.pauseTimer(id)
+        this.renderUI()
+      },
       deleteTimer: (id: number) => {
         this.timerService.deleteTimer(id)
         const currentDashboard = this.dashboardService.getCurrentDashboard()
@@ -67,8 +71,20 @@ export class Application implements IDashboardObserver, ITimerObserver {
         }
         this.renderUI()
       },
+      resetCountdownTimer: (id: number) => {
+        this.timerService.resetCountdownTimer(id)
+        this.renderUI()
+      },
       resetCountupTimer: (id: number) => {
         this.timerService.resetCountupTimer(id)
+        this.renderUI()
+      },
+      acknowledgeTimer: (id: number) => {
+        this.timerService.acknowledgeTimer(id)
+        this.renderUI()
+      },
+      stopAlert: (id: number) => {
+        this.timerService.stopAlert(id)
         this.renderUI()
       },
       setPreset: (minutes: number) => this.formHandler.setPreset(minutes),

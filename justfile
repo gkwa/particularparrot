@@ -1,21 +1,23 @@
-# Multi-Timer Application - Just recipes
-
-set shell := ["bash", "-c"]
-
-build:
-    pnpm build && mv dist/index.html dist/particularparrot.html
+set dotenv-load
 
 dev:
     pnpm dev
 
+clean:
+    rm -rf dist/
+    rm -rf node_modules/.vite
+
+build:
+    pnpm build && mv dist/index.html dist/particularparrot.html
+
 preview:
     pnpm preview
 
-open-dist:
-    open dist/particularparrot.html
+build-and-preview: build preview
 
-build-and-preview:
-    just build && pnpm preview
+test:
+    pnpm test
 
-build-and-open:
-    just build && just open-dist
+build-test: build test
+
+ci: clean build test

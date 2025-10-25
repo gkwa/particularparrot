@@ -13,6 +13,7 @@ import {
   IAudioService,
   IStorageService,
   ITimerRuntime,
+  IAlertConfig,
 } from "../types/index"
 
 export class TimerService implements ITimerService {
@@ -24,6 +25,13 @@ export class TimerService implements ITimerService {
   private storageService: IStorageService
   private nextId = Date.now()
 
+  private readonly DEFAULT_ALERT_CONFIG: IAlertConfig = {
+    enabled: true,
+    repeatCount: "infinite",
+    waitBetweenRepeat: 10,
+    utteranceTemplate: "{timer name} has completed",
+  }
+
   constructor(audioService: IAudioService, storageService: IStorageService) {
     this.audioService = audioService
     this.storageService = storageService
@@ -34,9 +42,21 @@ export class TimerService implements ITimerService {
   private loadTimers(): void {
     const stored = this.storageService.loadTimers()
     stored.forEach((timer: TimerState) => {
-      this.timers.set(timer.id, { ...timer, isRunning: false })
-      if (timer.id >= this.nextId) {
-        this.nextId = timer.id + 1
+      // Ensure countdown timers have alertConfig
+      let processedTimer = timer
+      if (timer.type === "countdown") {
+        const countdownTimer = timer as ICountdownTimerState
+        if (!countdownTimer.alertConfig) {
+          processedTimer = {
+            ...countdownTimer,
+            alertConfig: this.DEFAULT_ALERT_CONFIG,
+            isAcknowledged: false,
+          } as ICountdownTimerState
+        }
+      }
+      this.timers.set(processedTimer.id, { ...processedTimer, isRunning: false })
+      if (processedTimer.id >= this.nextId) {
+        this.nextId = processedTimer.id + 1
       }
     })
   }
@@ -49,16 +69,30 @@ export class TimerService implements ITimerService {
 
       if (runtime && runtime.startedAt > 0) {
         // Timer was running - resume it and set up interval
-        this.timers.set(timer.id, { ...timer, isRunning: true })
-        this.startInterval(timer.id)
+        let processedTimer = timer
+        if (timer.type === "countdown") {
+          const countdownTimer = timer as ICountdownTimerState
+          if (!countdownTimer.alertConfig) {
+            processedTimer = {
+              ...countdownTimer,
+              alertConfig: this.DEFAULT_ALERT_CONFIG,
+              isAcknowledged: false,
+            } as ICountdownTimerState
+          }
+        }
+
+        this.timers.set(processedTimer.id, { ...processedTimer, isRunning: true })
+        this.startInterval(processedTimer.id)
 
         // Check if timer has finished
-        const currentTimer = this.getComputedTimer(timer.id)
+        const currentTimer = this.getComputedTimer(processedTimer.id)
         if (currentTimer && currentTimer.type === "countdown") {
           const countdownTimer = currentTimer as ICountdownTimerState
           if (countdownTimer.remainingSeconds <= 0) {
-            this.finishedTimers.add(timer.id)
-            this.audioService.playBeep()
+            this.finishedTimers.add(processedTimer.id)
+            if (!countdownTimer.isAcknowledged) {
+              this.audioService.playAlert(currentTimer.label, countdownTimer.alertConfig)
+            }
           }
         }
       }
@@ -127,14 +161,20 @@ export class TimerService implements ITimerService {
       if (countdownTimer.remainingSeconds <= 0 && !this.finishedTimers.has(timerId)) {
         this.finishedTimers.add(timerId)
         this.pauseTimer(timerId)
-        this.audioService.playBeep()
-        const finishedTimer: ICountdownTimerState = {
-          ...countdownTimer,
-          remainingSeconds: 0,
-          isRunning: false,
-          isFinished: true,
+        this.audioService.playAlert(countdownTimer.label, countdownTimer.alertConfig)
+
+        // Get the latest state after pause
+        const latestTimer = this.timers.get(timerId)
+        if (latestTimer && latestTimer.type === "countdown") {
+          const finishedTimer: ICountdownTimerState = {
+            ...(latestTimer as ICountdownTimerState),
+            remainingSeconds: 0,
+            isFinished: true,
+          } as ICountdownTimerState
+          this.timers.set(timerId, finishedTimer)
+          this.persistTimers()
+          this.notifyObservers("onTimerUpdated", finishedTimer)
         }
-        this.notifyObservers("onTimerUpdated", finishedTimer)
         return
       }
     }
@@ -147,7 +187,11 @@ export class TimerService implements ITimerService {
     return this.nextId++
   }
 
-  createCountdownTimer(label: string, totalSeconds: number): TimerState {
+  createCountdownTimer(
+    label: string,
+    totalSeconds: number,
+    alertConfig?: IAlertConfig,
+  ): TimerState {
     if (totalSeconds <= 0) {
       throw new Error("Total time must be greater than 0")
     }
@@ -161,6 +205,8 @@ export class TimerService implements ITimerService {
       remainingSeconds: totalSeconds,
       isRunning: false,
       isFinished: false,
+      isAcknowledged: false,
+      alertConfig: alertConfig || this.DEFAULT_ALERT_CONFIG,
     }
 
     this.timers.set(id, timer)
@@ -192,13 +238,39 @@ export class TimerService implements ITimerService {
       throw new Error(`Timer with id ${id} not found`)
     }
 
-    if (timer.type === "countdown" && timer.isFinished) {
-      return
-    }
+    // If timer is finished but not acknowledged, don't start
+    if (timer.type === "countdown") {
+      const countdownTimer = timer as ICountdownTimerState
+      if (countdownTimer.isFinished && !countdownTimer.isAcknowledged) {
+        return
+      }
 
-    if (timer.isRunning) {
-      this.pauseTimer(id)
-      return
+      // If starting a finished timer that's acknowledged, reset it to original time
+      if (countdownTimer.isFinished && countdownTimer.isAcknowledged) {
+        const resetTimer: ICountdownTimerState = {
+          ...countdownTimer,
+          remainingSeconds: countdownTimer.totalSeconds,
+          isFinished: false,
+          isAcknowledged: false,
+        }
+        this.timers.set(id, resetTimer)
+        this.finishedTimers.delete(id)
+
+        const updatedTimer: TimerState = { ...resetTimer, isRunning: true }
+        this.timers.set(id, updatedTimer)
+
+        const runtime: ITimerRuntime = {
+          timerId: id,
+          startedAt: Date.now(),
+          baseRemainingSeconds: resetTimer.totalSeconds,
+        }
+
+        this.storageService.saveTimerRuntime(runtime)
+        this.startInterval(id)
+        this.persistTimers()
+        this.notifyObservers("onTimerUpdated", updatedTimer)
+        return
+      }
     }
 
     const updatedTimer: TimerState = { ...timer, isRunning: true }
@@ -262,6 +334,29 @@ export class TimerService implements ITimerService {
     this.notifyObservers("onTimerUpdated", updatedTimer)
   }
 
+  resetCountdownTimer(id: number): void {
+    const timer = this.timers.get(id)
+    if (!timer || timer.type !== "countdown") {
+      throw new Error(`Countdown timer with id ${id} not found`)
+    }
+    // Stop if running
+    if (timer.isRunning) {
+      this.pauseTimer(id)
+    }
+    const countdownTimer = timer as ICountdownTimerState
+    const resetTimer: ICountdownTimerState = {
+      ...countdownTimer,
+      remainingSeconds: countdownTimer.totalSeconds,
+      isFinished: false,
+      isAcknowledged: false,
+    }
+    this.timers.set(id, resetTimer)
+    this.finishedTimers.delete(id)
+    this.storageService.deleteTimerRuntime(id)
+    this.persistTimers()
+    this.notifyObservers("onTimerUpdated", resetTimer)
+  }
+
   resetCountupTimer(id: number): void {
     const timer = this.timers.get(id)
     if (!timer || timer.type !== "countup") {
@@ -284,6 +379,50 @@ export class TimerService implements ITimerService {
     this.notifyObservers("onTimerUpdated", resetTimer)
   }
 
+  acknowledgeTimer(id: number): void {
+    const timer = this.timers.get(id)
+    if (!timer || timer.type !== "countdown") {
+      throw new Error(`Countdown timer with id ${id} not found`)
+    }
+
+    const countdownTimer = timer as ICountdownTimerState
+
+    // Cancel ongoing alerts
+    this.audioService.cancelAlert()
+
+    // Mark as acknowledged
+    const acknowledgedTimer: ICountdownTimerState = {
+      ...countdownTimer,
+      isAcknowledged: true,
+    }
+
+    this.timers.set(id, acknowledgedTimer)
+    this.persistTimers()
+    this.notifyObservers("onTimerUpdated", acknowledgedTimer)
+  }
+
+  stopAlert(id: number): void {
+    const timer = this.timers.get(id)
+    if (!timer || timer.type !== "countdown") {
+      throw new Error(`Countdown timer with id ${id} not found`)
+    }
+
+    const countdownTimer = timer as ICountdownTimerState
+
+    // Cancel ongoing alerts
+    this.audioService.cancelAlert()
+
+    // Mark as acknowledged to stop the flashing and change button
+    const stoppedTimer: ICountdownTimerState = {
+      ...countdownTimer,
+      isAcknowledged: true,
+    }
+
+    this.timers.set(id, stoppedTimer)
+    this.persistTimers()
+    this.notifyObservers("onTimerUpdated", stoppedTimer)
+  }
+
   deleteTimer(id: number): void {
     const timer = this.timers.get(id)
     if (!timer) return
@@ -295,6 +434,9 @@ export class TimerService implements ITimerService {
         this.intervals.delete(id)
       }
     }
+
+    // Cancel any ongoing alert for this timer
+    this.audioService.cancelAlert()
 
     this.timers.delete(id)
     this.finishedTimers.delete(id)

@@ -2,7 +2,7 @@
  * FormHandler - Single Responsibility: Handle form inputs and user interactions
  */
 
-import { ITimerService, IDashboardService } from "../types/index"
+import { ITimerService, IDashboardService, IAlertConfig } from "../types/index"
 
 export class FormHandler {
   private timerService: ITimerService
@@ -34,6 +34,10 @@ export class FormHandler {
       }
     })
     dashboardNameInput?.addEventListener("input", () => this.updateDashboardButtonState())
+
+    // Alert config listeners
+    const repeatModeSelect = document.getElementById("repeatMode") as HTMLSelectElement
+    repeatModeSelect?.addEventListener("change", () => this.updateRepeatConfigVisibility())
 
     // Timer creation
     const createTimerBtn = document.getElementById("createTimerBtn")
@@ -67,6 +71,59 @@ export class FormHandler {
     this.updateDashboardButtonState()
   }
 
+  private updateRepeatConfigVisibility(): void {
+    const repeatMode = (document.getElementById("repeatMode") as HTMLSelectElement).value
+    const repeatCountGroup = document.getElementById("repeatCountGroup")
+
+    if (repeatCountGroup) {
+      repeatCountGroup.style.display = repeatMode === "finite" ? "grid" : "none"
+    }
+  }
+
+  private getAlertConfig(): IAlertConfig {
+    const alertEnabled = (document.getElementById("alertEnabled") as HTMLInputElement).checked
+    const repeatMode = (document.getElementById("repeatMode") as HTMLSelectElement).value
+    const repeatCount = parseInt(
+      (document.getElementById("repeatCount") as HTMLInputElement).value,
+      10,
+    )
+    const waitBetweenRepeat = parseInt(
+      (document.getElementById("waitBetweenRepeat") as HTMLInputElement).value,
+      10,
+    )
+    const utteranceTemplate = (
+      document.getElementById("utteranceTemplate") as HTMLInputElement
+    ).value.trim()
+
+    let config: IAlertConfig
+
+    if (repeatMode === "once") {
+      config = {
+        enabled: alertEnabled,
+        repeatCount: 1,
+        waitBetweenRepeat: 0,
+        utteranceTemplate: utteranceTemplate || "timer {timer name} has completed",
+      }
+    } else if (repeatMode === "finite") {
+      config = {
+        enabled: alertEnabled,
+        repeatCount: Math.max(1, repeatCount),
+        waitBetweenRepeat,
+        utteranceTemplate: utteranceTemplate || "timer {timer name} has completed",
+      }
+    } else {
+      // infinite
+      config = {
+        enabled: alertEnabled,
+        repeatCount: "infinite",
+        waitBetweenRepeat,
+        utteranceTemplate: utteranceTemplate || "timer {timer name} has completed",
+      }
+    }
+
+    return config
+  }
+
   setMode(mode: "countdown" | "countup"): void {
     this.currentMode = mode
 
@@ -74,7 +131,6 @@ export class FormHandler {
     const modeCountup = document.getElementById("modeCountup")
     const countdownInputs = document.getElementById("countdownInputs")
     const countupInputs = document.getElementById("countupInputs")
-    const presetSection = document.getElementById("presetSection")
 
     if (mode === "countdown") {
       modeCountdown?.classList.add("active")
@@ -85,9 +141,6 @@ export class FormHandler {
       if (countupInputs) {
         countupInputs.style.display = "none"
       }
-      if (presetSection) {
-        presetSection.style.display = "block"
-      }
     } else {
       modeCountdown?.classList.remove("active")
       modeCountup?.classList.add("active")
@@ -96,9 +149,6 @@ export class FormHandler {
       }
       if (countupInputs) {
         countupInputs.style.display = "grid"
-      }
-      if (presetSection) {
-        presetSection.style.display = "none"
       }
     }
   }
@@ -128,7 +178,6 @@ export class FormHandler {
   updateTimerButtonStates(): void {
     const createTimerBtn = document.getElementById("createTimerBtn") as HTMLButtonElement
     const createCountupBtn = document.getElementById("createCountupBtn") as HTMLButtonElement
-    const presetSection = document.getElementById("presetSection") as HTMLElement
     const modeSelector = document.querySelector(".mode-selector") as HTMLElement
     const countdownInputs = document.getElementById("countdownInputs") as HTMLElement
     const countupInputs = document.getElementById("countupInputs") as HTMLElement
@@ -140,10 +189,6 @@ export class FormHandler {
     }
     if (createCountupBtn) {
       createCountupBtn.disabled = !hasDashboard
-    }
-    if (presetSection) {
-      presetSection.style.opacity = hasDashboard ? "1" : "0.5"
-      presetSection.style.pointerEvents = hasDashboard ? "auto" : "none"
     }
     if (modeSelector) {
       modeSelector.style.opacity = hasDashboard ? "1" : "0.5"
@@ -221,19 +266,20 @@ export class FormHandler {
 
     const totalSeconds = this.parseTimeFormat(timeFormat)
     if (totalSeconds === null || totalSeconds <= 0) {
-      alert("Invalid time format. Use format like: 2h3m4s, 5m, 30s")
+      alert("Invalid time format. Use formats like: 2h3m4s, 5m, 30s")
       return
     }
 
-    try {
-      const timer = this.timerService.createCountdownTimer(label, totalSeconds)
-      this.dashboardService.addTimerToDashboard(currentDashboard.id, timer.id)
+    // Get alert configuration from form
+    const alertConfig = this.getAlertConfig()
 
-      if (labelInput) labelInput.value = ""
-      if (timeInput) timeInput.value = ""
-    } catch (error) {
-      alert(`Error creating timer: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
+    // Create timer with alert config
+    const timer = this.timerService.createCountdownTimer(label, totalSeconds, alertConfig)
+
+    this.dashboardService.addTimerToDashboard(currentDashboard.id, timer.id)
+
+    labelInput.value = ""
+    timeInput.value = ""
   }
 
   private createCountupTimer(): void {
@@ -243,8 +289,13 @@ export class FormHandler {
       return
     }
 
-    const labelInput = document.getElementById("labelCountup") as HTMLInputElement
-    const label = labelInput?.value?.trim() || "Counter"
+    const labelCountupInput = document.getElementById("labelCountup") as HTMLInputElement
+    const label = labelCountupInput?.value?.trim() || ""
+
+    if (!label) {
+      alert("Please enter a timer label")
+      return
+    }
 
     // Check for duplicate label in current dashboard
     if (!this.isLabelUnique(label, "countup")) {
@@ -252,44 +303,38 @@ export class FormHandler {
       return
     }
 
-    try {
-      const timer = this.timerService.createCountupTimer(label)
-      this.dashboardService.addTimerToDashboard(currentDashboard.id, timer.id)
+    const timer = this.timerService.createCountupTimer(label)
+    this.dashboardService.addTimerToDashboard(currentDashboard.id, timer.id)
 
-      if (labelInput) labelInput.value = ""
-    } catch (error) {
-      alert(`Error creating counter: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
+    labelCountupInput.value = ""
   }
 
   private createDashboard(): void {
     const dashboardNameInput = document.getElementById("dashboardName") as HTMLInputElement
-    const name = dashboardNameInput?.value?.trim()
+    const name = dashboardNameInput?.value?.trim() || ""
 
     if (!name) {
       alert("Please enter a dashboard name")
       return
     }
 
-    try {
-      this.dashboardService.createDashboard(name)
-      if (dashboardNameInput) dashboardNameInput.value = ""
-      this.updateDashboardButtonState()
-    } catch (error) {
-      alert(`Error creating dashboard: ${error instanceof Error ? error.message : "Unknown error"}`)
-    }
+    this.dashboardService.createDashboard(name)
+    dashboardNameInput.value = ""
+    this.updateDashboardButtonState()
   }
 
   private isLabelUnique(label: string, type: "countdown" | "countup"): boolean {
     const currentDashboard = this.dashboardService.getCurrentDashboard()
-    if (!currentDashboard) return true
+    if (!currentDashboard) {
+      return true
+    }
 
     const allTimers = this.timerService.getAllTimers()
     return !allTimers.some(
       (timer) =>
-        currentDashboard.timerIds.includes(timer.id) &&
-        timer.label.toLowerCase() === label.toLowerCase() &&
-        timer.type === type,
+        timer.label === label &&
+        timer.type === type &&
+        currentDashboard.timerIds.includes(timer.id),
     )
   }
 }

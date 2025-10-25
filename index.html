@@ -7,7 +7,7 @@
   </head>
   <body>
     <div class="container">
-      <h1>⏱️ Multiple Timers</h1>
+      <h1>⏱️ Particularparrot</h1>
 
       <div class="dashboards-section">
         <h2>Dashboard Management</h2>
@@ -30,17 +30,6 @@
           <button class="mode-btn active" id="modeCountdown">⏱️ Countdown</button>
           <button class="mode-btn" id="modeCountup">⏲️ Count Up</button>
         </div>
-        <div id="presetSection" style="display: block">
-          <p>Quick presets:</p>
-          <div class="preset-buttons">
-            <button class="preset-btn" onclick="window.app.setPreset(1)">1 min</button>
-            <button class="preset-btn" onclick="window.app.setPreset(2)">2 mins</button>
-            <button class="preset-btn" onclick="window.app.setPreset(5)">5 mins</button>
-            <button class="preset-btn" onclick="window.app.setPreset(10)">10 mins</button>
-            <button class="preset-btn" onclick="window.app.setPreset(15)">15 mins</button>
-            <button class="preset-btn" onclick="window.app.setPreset(30)">30 mins</button>
-          </div>
-        </div>
         <div id="countdownInputs" class="input-group">
           <div class="input-field">
             <label for="label">Timer Label</label>
@@ -50,6 +39,50 @@
             <label for="timeFormat">Time Duration</label>
             <input type="text" id="timeFormat" placeholder="e.g., 2h3m4s or 5m or 30s" />
           </div>
+
+          <div class="alert-config-section">
+            <h3>Audio Alert Settings</h3>
+
+            <div class="alert-config-group">
+              <label>
+                <input type="checkbox" id="alertEnabled" checked />
+                Enable Audio Alert
+              </label>
+            </div>
+
+            <div class="alert-config-group" style="grid-column: 1 / -1">
+              <label for="utteranceTemplate">Alert Message:</label>
+              <input
+                type="text"
+                id="utteranceTemplate"
+                value="timer {timer name} has completed"
+                style="flex: 1; min-width: 250px"
+              />
+              <small style="color: #666; grid-column: 1 / -1; margin-top: -10px"
+                >Use {timer name} as placeholder for the timer label</small
+              >
+            </div>
+
+            <div class="alert-config-group">
+              <label for="repeatMode">Repeat:</label>
+              <select id="repeatMode">
+                <option value="infinite">Infinite</option>
+                <option value="finite">Specific Number</option>
+                <option value="once">Once (No Repeat)</option>
+              </select>
+            </div>
+
+            <div class="alert-config-group" id="repeatCountGroup" style="display: none">
+              <label for="repeatCount">Number of Times:</label>
+              <input type="number" id="repeatCount" min="1" max="100" value="3" />
+            </div>
+
+            <div class="alert-config-group">
+              <label for="waitBetweenRepeat">Wait Between Alerts (seconds):</label>
+              <input type="number" id="waitBetweenRepeat" min="1" max="60" value="10" />
+            </div>
+          </div>
+
           <button class="btn-create" id="createTimerBtn">Create Timer</button>
         </div>
         <div id="countupInputs" class="input-group" style="display: none">

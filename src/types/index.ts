@@ -1,30 +1,37 @@
 /**
- * Timer domain types and interfaces
- * Following ISP (Interface Segregation Principle) - clients depend only on what they need
+ * Type Definitions and Interfaces - Single Responsibility: Define contracts
+ * Following Interface Segregation Principle (ISP)
  */
 
-export type TimerType = "countdown" | "countup"
-
-export interface ITimerState {
+export interface ICountdownTimerState {
   readonly id: number
   readonly label: string
-  readonly type: TimerType
+  readonly type: "countdown"
+  readonly totalSeconds: number
+  readonly remainingSeconds: number
+  readonly isRunning: boolean
+  readonly isFinished: boolean
+  readonly isAcknowledged: boolean
+  readonly alertConfig: IAlertConfig
+}
+
+export interface ICountupTimerState {
+  readonly id: number
+  readonly label: string
+  readonly type: "countup"
+  readonly elapsedSeconds: number
   readonly isRunning: boolean
   readonly isFinished: boolean
 }
 
-export interface ICountdownTimerState extends ITimerState {
-  readonly type: "countdown"
-  readonly totalSeconds: number
-  readonly remainingSeconds: number
-}
-
-export interface ICountupTimerState extends ITimerState {
-  readonly type: "countup"
-  readonly elapsedSeconds: number
-}
-
 export type TimerState = ICountdownTimerState | ICountupTimerState
+
+export interface IAlertConfig {
+  readonly enabled: boolean
+  readonly repeatCount: number | "infinite"
+  readonly waitBetweenRepeat: number
+  readonly utteranceTemplate: string
+}
 
 export interface IDashboard {
   readonly id: string
@@ -55,6 +62,8 @@ export interface IDashboardObserver {
 
 export interface IAudioService {
   playBeep(): void
+  playAlert(timerName: string, config: IAlertConfig): void
+  cancelAlert(): void
 }
 
 export interface IStorageService {
@@ -72,12 +81,15 @@ export interface IStorageService {
 }
 
 export interface ITimerService {
-  createCountdownTimer(label: string, totalSeconds: number): TimerState
+  createCountdownTimer(label: string, totalSeconds: number, alertConfig?: IAlertConfig): TimerState
   createCountupTimer(label: string): TimerState
   startTimer(id: number): void
   pauseTimer(id: number): void
+  resetCountdownTimer(id: number): void
   resetCountupTimer(id: number): void
   deleteTimer(id: number): void
+  acknowledgeTimer(id: number): void
+  stopAlert(id: number): void
   getTimer(id: number): TimerState | undefined
   getAllTimers(): TimerState[]
   subscribe(observer: ITimerObserver): void

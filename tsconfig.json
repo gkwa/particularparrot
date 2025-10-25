@@ -16,9 +16,9 @@
     "noImplicitReturns": true,
     "resolveJsonModule": true,
     "moduleResolution": "bundler",
-    "sourceMap": true,
+    "sourceMap": false,
     "noEmit": true
   },
   "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["src/**/*.test.ts", "src/**/__tests__/**"]
 }
