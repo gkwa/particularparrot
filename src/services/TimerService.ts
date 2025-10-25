@@ -147,14 +147,7 @@ export class TimerService implements ITimerService {
     return this.nextId++
   }
 
-  createCountdownTimer(
-    label: string,
-    hours: number,
-    minutes: number,
-    seconds: number,
-  ): ICountdownTimerState {
-    const totalSeconds = hours * 3600 + minutes * 60 + seconds
-
+  createCountdownTimer(label: string, totalSeconds: number): TimerState {
     if (totalSeconds <= 0) {
       throw new Error("Total time must be greater than 0")
     }
@@ -176,7 +169,7 @@ export class TimerService implements ITimerService {
     return timer
   }
 
-  createCountupTimer(label: string): ICountupTimerState {
+  createCountupTimer(label: string): TimerState {
     const id = this.getNextId()
     const timer: ICountupTimerState = {
       id,
@@ -205,42 +198,21 @@ export class TimerService implements ITimerService {
 
     if (timer.isRunning) {
       this.pauseTimer(id)
-    } else {
-      this.resumeTimer(id)
+      return
     }
-  }
 
-  private resumeTimer(id: number): void {
-    const timer = this.timers.get(id)
-    if (!timer) return
-
-    const currentTimer = this.getComputedTimer(id)
-    if (!currentTimer) return
-
-    const updatedTimer = { ...currentTimer, isRunning: true }
+    const updatedTimer: TimerState = { ...timer, isRunning: true }
     this.timers.set(id, updatedTimer)
-    this.finishedTimers.delete(id)
 
-    // Build runtime object with proper values
-    const runtimeData: {
-      timerId: number
-      startedAt: number
-      baseRemainingSeconds?: number
-      baseElapsedSeconds?: number
-    } = {
+    const runtime: ITimerRuntime = {
       timerId: id,
       startedAt: Date.now(),
+      baseRemainingSeconds:
+        timer.type === "countdown" ? (timer as ICountdownTimerState).remainingSeconds : undefined,
+      baseElapsedSeconds:
+        timer.type === "countup" ? (timer as ICountupTimerState).elapsedSeconds : undefined,
     }
 
-    if (currentTimer.type === "countdown") {
-      const countdownTimer = currentTimer as ICountdownTimerState
-      runtimeData.baseRemainingSeconds = countdownTimer.remainingSeconds
-    } else if (currentTimer.type === "countup") {
-      const countupTimer = currentTimer as ICountupTimerState
-      runtimeData.baseElapsedSeconds = countupTimer.elapsedSeconds
-    }
-
-    const runtime: ITimerRuntime = runtimeData
     this.storageService.saveTimerRuntime(runtime)
     this.startInterval(id)
     this.persistTimers()
@@ -249,23 +221,42 @@ export class TimerService implements ITimerService {
 
   pauseTimer(id: number): void {
     const timer = this.timers.get(id)
-    if (!timer) return
+    if (!timer) {
+      throw new Error(`Timer with id ${id} not found`)
+    }
 
+    // Stop the interval
     const interval = this.intervals.get(id)
     if (interval) {
       clearInterval(interval)
       this.intervals.delete(id)
     }
 
-    // Get the computed current state and save it
-    const currentTimer = this.getComputedTimer(id)
-    if (!currentTimer) return
+    // Get the computed state before pausing (to preserve accumulated time)
+    const computedTimer = this.getComputedTimer(id)
+    let updatedTimer: TimerState = { ...timer, isRunning: false }
 
-    const updatedTimer = { ...currentTimer, isRunning: false }
+    if (computedTimer) {
+      if (timer.type === "countdown") {
+        updatedTimer = {
+          ...(updatedTimer as ICountdownTimerState),
+          remainingSeconds: (computedTimer as ICountdownTimerState).remainingSeconds,
+        } as ICountdownTimerState
+      } else {
+        updatedTimer = {
+          ...(updatedTimer as ICountupTimerState),
+          elapsedSeconds: (computedTimer as ICountupTimerState).elapsedSeconds,
+        } as ICountupTimerState
+      }
+    }
+
     this.timers.set(id, updatedTimer)
 
-    // Clear runtime - timer is now paused
-    this.storageService.deleteTimerRuntime(id)
+    // Clear runtime to stop accumulation
+    this.storageService.saveTimerRuntime({
+      timerId: id,
+      startedAt: 0,
+    })
 
     this.persistTimers()
     this.notifyObservers("onTimerUpdated", updatedTimer)
@@ -274,35 +265,40 @@ export class TimerService implements ITimerService {
   resetCountupTimer(id: number): void {
     const timer = this.timers.get(id)
     if (!timer || timer.type !== "countup") {
-      throw new Error("Can only reset countup timers")
+      throw new Error(`Countup timer with id ${id} not found`)
     }
 
-    this.pauseTimer(id)
+    // Stop if running
+    if (timer.isRunning) {
+      this.pauseTimer(id)
+    }
 
-    const countupTimer = timer as ICountupTimerState
-    const updatedTimer: ICountupTimerState = {
-      ...countupTimer,
+    const resetTimer: ICountupTimerState = {
+      ...(timer as ICountupTimerState),
       elapsedSeconds: 0,
-      isRunning: false,
     }
 
-    this.timers.set(id, updatedTimer)
+    this.timers.set(id, resetTimer)
     this.storageService.deleteTimerRuntime(id)
-    this.finishedTimers.delete(id)
     this.persistTimers()
-    this.notifyObservers("onTimerUpdated", updatedTimer)
+    this.notifyObservers("onTimerUpdated", resetTimer)
   }
 
   deleteTimer(id: number): void {
-    const interval = this.intervals.get(id)
-    if (interval) {
-      clearInterval(interval)
-      this.intervals.delete(id)
+    const timer = this.timers.get(id)
+    if (!timer) return
+
+    if (timer.isRunning) {
+      const interval = this.intervals.get(id)
+      if (interval) {
+        clearInterval(interval)
+        this.intervals.delete(id)
+      }
     }
 
     this.timers.delete(id)
-    this.storageService.deleteTimerRuntime(id)
     this.finishedTimers.delete(id)
+    this.storageService.deleteTimerRuntime(id)
     this.persistTimers()
     this.notifyObservers("onTimerDeleted", id)
   }
@@ -312,7 +308,14 @@ export class TimerService implements ITimerService {
   }
 
   getAllTimers(): TimerState[] {
-    return Array.from(this.timers.keys()).map((id) => this.getComputedTimer(id)!)
+    const all: TimerState[] = []
+    this.timers.forEach((timer) => {
+      const computed = this.getComputedTimer(timer.id)
+      if (computed) {
+        all.push(computed)
+      }
+    })
+    return all
   }
 
   subscribe(observer: ITimerObserver): void {
@@ -324,17 +327,16 @@ export class TimerService implements ITimerService {
   }
 
   private persistTimers(): void {
-    const timers = Array.from(this.timers.values())
+    const timers: TimerState[] = []
+    this.timers.forEach((timer) => {
+      timers.push(timer)
+    })
     this.storageService.saveTimers(timers)
   }
 
   private notifyObservers(method: keyof ITimerObserver, data: TimerState | number): void {
     this.observers.forEach((observer) => {
-      if (method === "onTimerDeleted") {
-        observer.onTimerDeleted(data as number)
-      } else {
-        ;(observer[method] as any)(data)
-      }
+      ;(observer[method] as any)(data)
     })
   }
 }

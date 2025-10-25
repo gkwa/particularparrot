@@ -9,4 +9,7 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
   },
+  preview: {
+    open: "/particularparrot.html",
+  },
 })

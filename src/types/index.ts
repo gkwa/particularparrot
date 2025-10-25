@@ -29,15 +29,15 @@ export type TimerState = ICountdownTimerState | ICountupTimerState
 export interface IDashboard {
   readonly id: string
   readonly name: string
-  readonly timerIds: number[]
+  readonly timerIds: readonly number[]
   readonly createdAt: number
 }
 
 export interface ITimerRuntime {
   readonly timerId: number
-  readonly startedAt: number // Timestamp when timer was started (for running timers)
-  readonly baseRemainingSeconds?: number // For countdown: remaining seconds at start time
-  readonly baseElapsedSeconds?: number // For countup: elapsed seconds at start time
+  readonly startedAt: number
+  readonly baseRemainingSeconds?: number
+  readonly baseElapsedSeconds?: number
 }
 
 export interface ITimerObserver {
@@ -72,7 +72,7 @@ export interface IStorageService {
 }
 
 export interface ITimerService {
-  createCountdownTimer(label: string, hours: number, minutes: number, seconds: number): TimerState
+  createCountdownTimer(label: string, totalSeconds: number): TimerState
   createCountupTimer(label: string): TimerState
   startTimer(id: number): void
   pauseTimer(id: number): void

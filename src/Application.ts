@@ -42,6 +42,7 @@ export class Application implements IDashboardObserver, ITimerObserver {
 
   initialize(): void {
     this.renderUI()
+    this.formHandler.updateTimerButtonStates()
     this.exposePublicAPI()
   }
 
@@ -75,10 +76,12 @@ export class Application implements IDashboardObserver, ITimerObserver {
       selectDashboard: (id: string) => {
         this.formHandler.selectDashboard(id)
         this.renderUI()
+        this.formHandler.updateTimerButtonStates()
       },
       deleteDashboard: (id: string) => {
         this.dashboardService.deleteDashboard(id)
         this.renderUI()
+        this.formHandler.updateTimerButtonStates()
       },
     }
   }
@@ -97,6 +100,7 @@ export class Application implements IDashboardObserver, ITimerObserver {
 
   onDashboardCreated(_dashboard: IDashboard): void {
     this.renderUI()
+    this.formHandler.updateTimerButtonStates()
   }
 
   onDashboardUpdated(_dashboard: IDashboard): void {
@@ -105,9 +109,11 @@ export class Application implements IDashboardObserver, ITimerObserver {
 
   onDashboardDeleted(_id: string): void {
     this.renderUI()
+    this.formHandler.updateTimerButtonStates()
   }
 
   onDashboardSelected(_dashboard: IDashboard): void {
     this.renderUI()
+    this.formHandler.updateTimerButtonStates()
   }
 }
