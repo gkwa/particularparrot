@@ -10,7 +10,7 @@
  */
 
 export interface IRemoteConfig {
-  rawUrl: string // e.g., https://raw.githubusercontent.com/user/repo/refs/heads/master/dashboards.json
+  rawUrl: string
 }
 
 export interface IDashboardManifest {
@@ -23,7 +23,7 @@ export interface IDashboardManifest {
       id: number
       label: string
       type: "countdown" | "countup"
-      totalSeconds?: number // for countdown
+      totalSeconds?: number
       alertConfig?: {
         enabled: boolean
         utteranceTemplate: string
@@ -48,9 +48,8 @@ export class ManifestRepository {
    * Save manifest URL to localStorage
    */
   saveManifestUrl(rawUrl: string): void {
-    // Validate it's a valid HTTP(S) URL
     if (!this.isValidManifestUrl(rawUrl)) {
-      throw new Error("Invalid manifest URL. Must be an HTTP(S) URL ending with .json")
+      throw new Error("Invalid manifest URL. Must be an HTTP(S) URL")
     }
 
     this.remoteConfig = { rawUrl }
@@ -101,8 +100,8 @@ export class ManifestRepository {
         throw new Error(`Failed to fetch from remote: ${response.status} ${response.statusText}`)
       }
 
-      const manifest = (await response.json()) as IDashboardManifest
-      this.validateManifest(manifest)
+      const data = await response.json()
+      const manifest = this.extractAndValidateManifest(data)
 
       // Cache locally
       localStorage.setItem(this.manifestCacheKey, JSON.stringify(manifest))
@@ -178,11 +177,15 @@ export class ManifestRepository {
       reader.onload = (event) => {
         try {
           const content = event.target?.result as string
-          const manifest = JSON.parse(content) as IDashboardManifest
-          this.validateManifest(manifest)
+          const data = JSON.parse(content)
+          const manifest = this.extractAndValidateManifest(data)
           resolve(manifest)
         } catch (error) {
-          reject(new Error(`Failed to parse JSON file: ${error}`))
+          reject(
+            new Error(
+              `Failed to parse JSON file: ${error instanceof Error ? error.message : "Unknown error"}`,
+            ),
+          )
         }
       }
       reader.onerror = () => {
@@ -193,18 +196,137 @@ export class ManifestRepository {
   }
 
   /**
-   * Validate manifest structure
+   * Extract manifest from potentially wrapped response and validate
+   * Handles both direct manifests and JSONBin wrapped responses
    */
-  private validateManifest(manifest: any): void {
-    if (!manifest.version || !manifest.dashboards || !Array.isArray(manifest.dashboards)) {
-      throw new Error("Invalid manifest format. Missing required fields.")
-    }
+  private extractAndValidateManifest(data: unknown): IDashboardManifest {
+    try {
+      let manifest: any = data
 
-    // Validate each dashboard
-    for (const dashboard of manifest.dashboards) {
-      if (!dashboard.id || !dashboard.name || !Array.isArray(dashboard.timers)) {
-        throw new Error("Invalid dashboard format in manifest.")
+      // Handle JSONBin wrapped response
+      if (manifest && typeof manifest === "object" && "record" in manifest) {
+        manifest = manifest.record
       }
+
+      // Validate required fields exist
+      if (!manifest || typeof manifest !== "object") {
+        throw new Error("Invalid manifest: not an object")
+      }
+
+      if (typeof manifest.version !== "string") {
+        throw new Error("Invalid manifest: missing or invalid 'version' field")
+      }
+
+      if (typeof manifest.exportedAt !== "string") {
+        throw new Error("Invalid manifest: missing or invalid 'exportedAt' field")
+      }
+
+      if (!Array.isArray(manifest.dashboards)) {
+        throw new Error(
+          "Invalid manifest: missing or invalid 'dashboards' field (must be an array)",
+        )
+      }
+
+      // Validate each dashboard
+      for (let i = 0; i < manifest.dashboards.length; i++) {
+        const dashboard = manifest.dashboards[i]
+
+        if (!dashboard || typeof dashboard !== "object") {
+          throw new Error(`Invalid dashboard at index ${i}: not an object`)
+        }
+
+        if (typeof dashboard.id !== "string") {
+          throw new Error(`Invalid dashboard at index ${i}: missing or invalid 'id' field`)
+        }
+
+        if (typeof dashboard.name !== "string") {
+          throw new Error(`Invalid dashboard at index ${i}: missing or invalid 'name' field`)
+        }
+
+        if (!Array.isArray(dashboard.timers)) {
+          throw new Error(
+            `Invalid dashboard at index ${i}: missing or invalid 'timers' field (must be an array)`,
+          )
+        }
+
+        // Validate each timer
+        for (let j = 0; j < dashboard.timers.length; j++) {
+          const timer = dashboard.timers[j]
+
+          if (!timer || typeof timer !== "object") {
+            throw new Error(`Invalid timer at dashboard[${i}].timers[${j}]: not an object`)
+          }
+
+          if (typeof timer.id !== "number") {
+            throw new Error(
+              `Invalid timer at dashboard[${i}].timers[${j}]: missing or invalid 'id' field`,
+            )
+          }
+
+          if (typeof timer.label !== "string") {
+            throw new Error(
+              `Invalid timer at dashboard[${i}].timers[${j}]: missing or invalid 'label' field`,
+            )
+          }
+
+          if (timer.type !== "countdown" && timer.type !== "countup") {
+            throw new Error(
+              `Invalid timer at dashboard[${i}].timers[${j}]: 'type' must be 'countdown' or 'countup'`,
+            )
+          }
+
+          // Validate countdown-specific fields
+          if (timer.type === "countdown") {
+            if (timer.totalSeconds !== undefined && typeof timer.totalSeconds !== "number") {
+              throw new Error(
+                `Invalid timer at dashboard[${i}].timers[${j}]: 'totalSeconds' must be a number`,
+              )
+            }
+
+            if (timer.alertConfig !== undefined) {
+              const config = timer.alertConfig
+              if (!config || typeof config !== "object") {
+                throw new Error(
+                  `Invalid timer at dashboard[${i}].timers[${j}]: 'alertConfig' must be an object`,
+                )
+              }
+
+              if (typeof config.enabled !== "boolean") {
+                throw new Error(
+                  `Invalid timer at dashboard[${i}].timers[${j}].alertConfig: missing or invalid 'enabled' field`,
+                )
+              }
+
+              if (typeof config.utteranceTemplate !== "string") {
+                throw new Error(
+                  `Invalid timer at dashboard[${i}].timers[${j}].alertConfig: missing or invalid 'utteranceTemplate' field`,
+                )
+              }
+
+              if (
+                config.repeatCount !== "infinite" &&
+                config.repeatCount !== "finite" &&
+                config.repeatCount !== "once" &&
+                typeof config.repeatCount !== "number"
+              ) {
+                throw new Error(
+                  `Invalid timer at dashboard[${i}].timers[${j}].alertConfig: 'repeatCount' must be 'infinite', 'finite', 'once', or a number`,
+                )
+              }
+
+              if (typeof config.waitBetweenRepeat !== "number") {
+                throw new Error(
+                  `Invalid timer at dashboard[${i}].timers[${j}].alertConfig: missing or invalid 'waitBetweenRepeat' field`,
+                )
+              }
+            }
+          }
+        }
+      }
+
+      return manifest as IDashboardManifest
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(`Validation failed: ${String(error)}`)
     }
   }
 
