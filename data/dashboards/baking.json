@@ -1,0 +1,143 @@
+{
+  "version": "1.0.0",
+  "exportedAt": "2025-10-26T18:40:44.682Z",
+  "dashboards": [
+    {
+      "id": "dashboard-1761503924835",
+      "name": "baking",
+      "timers": [
+        {
+          "id": 1761503902221,
+          "label": "bulk fermentation",
+          "type": "countup"
+        },
+        {
+          "id": 1761503902222,
+          "label": "autolyse",
+          "type": "countdown",
+          "totalSeconds": 3600,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902223,
+          "label": "rest after autolyse",
+          "type": "countdown",
+          "totalSeconds": 1800,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902224,
+          "label": "rest after stretch and fold 1",
+          "type": "countdown",
+          "totalSeconds": 900,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902225,
+          "label": "rest after stretch and fold 2",
+          "type": "countdown",
+          "totalSeconds": 900,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902226,
+          "label": "rest after stretch and fold 3",
+          "type": "countdown",
+          "totalSeconds": 900,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902227,
+          "label": "rest after stretch and fold 4",
+          "type": "countdown",
+          "totalSeconds": 900,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902228,
+          "label": "cold proof",
+          "type": "countdown",
+          "totalSeconds": 43200,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902229,
+          "label": "bake with lid on",
+          "type": "countdown",
+          "totalSeconds": 1800,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        },
+        {
+          "id": 1761503902230,
+          "label": "bake with lid off",
+          "type": "countdown",
+          "totalSeconds": 720,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 3,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "dashboard-1761503924847",
+      "name": "birthdays",
+      "timers": [
+        {
+          "id": 1761503902231,
+          "label": "beth's bday",
+          "type": "countdown",
+          "totalSeconds": 518400,
+          "alertConfig": {
+            "enabled": true,
+            "repeatCount": "infinite",
+            "waitBetweenRepeat": 10,
+            "utteranceTemplate": "timer {timer name} has completed"
+          }
+        }
+      ]
+    }
+  ]
+}
