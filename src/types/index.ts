@@ -66,19 +66,6 @@ export interface IAudioService {
   cancelAlert(): void
 }
 
-export interface IScreenWakeLockService {
-  isSupported(): boolean
-  acquire(): Promise<void>
-  release(): Promise<void>
-  isActive(): boolean
-  setOnReleaseCallback(callback: () => void): void
-}
-
-export interface IScreenWakeLockUIController {
-  initialize(): void
-  updateStatus(isActive: boolean): void
-}
-
 export interface IStorageService {
   saveDashboard(dashboard: IDashboard): void
   loadDashboard(id: string): IDashboard | null

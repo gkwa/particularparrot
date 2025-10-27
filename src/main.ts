@@ -1,25 +1,12 @@
 /**
- * main.ts - Application entry point
- * Initializes and starts the application
+ * Main entry point for the Multi-Timer application
  */
 
-import "./styles/main.css"
 import { Application } from "./Application"
+import "./styles/main.css"
 
-async function main() {
-  try {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", async () => {
-        const app = new Application()
-        await app.initialize()
-      })
-    } else {
-      const app = new Application()
-      await app.initialize()
-    }
-  } catch (err) {
-    console.error("Failed to initialize application:", err)
-  }
-}
-
-main()
+// Initialize application when DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+  const app = new Application()
+  app.initialize()
+})

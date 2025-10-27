@@ -9,17 +9,6 @@
     <div class="container">
       <h1>⏱️ Particularparrot</h1>
 
-      <div class="screen-wake-section">
-        <div class="toggle-wrapper">
-          <label class="toggle-label">
-            <input type="checkbox" id="screenWakeToggle" class="toggle-checkbox" />
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-text">Keep screen awake</span>
-        </div>
-        <p class="wake-lock-status" id="wakeLockStatus"></p>
-      </div>
-
       <div class="dashboards-section">
         <h2>Dashboard Management</h2>
         <div id="githubConfigContainer"></div>
@@ -79,40 +68,35 @@
               <label for="repeatMode">Repeat:</label>
               <select id="repeatMode">
                 <option value="infinite">Infinite</option>
-                <option value="finite">Specific Count</option>
-                <option value="once">Once</option>
+                <option value="finite">Specific Number</option>
+                <option value="once">Once (No Repeat)</option>
               </select>
             </div>
 
             <div class="alert-config-group" id="repeatCountGroup" style="display: none">
-              <label for="repeatCount">Count:</label>
-              <input type="number" id="repeatCount" min="1" value="3" />
+              <label for="repeatCount">Number of Times:</label>
+              <input type="number" id="repeatCount" min="1" max="100" value="3" />
             </div>
 
             <div class="alert-config-group">
-              <label for="waitBetweenRepeat">Wait Between (seconds):</label>
-              <input type="number" id="waitBetweenRepeat" min="0" value="1" step="1" />
+              <label for="waitBetweenRepeat">Wait Between Alerts (seconds):</label>
+              <input type="number" id="waitBetweenRepeat" min="1" max="60" value="10" />
             </div>
           </div>
+
+          <button class="btn-create" id="createTimerBtn">Create Timer</button>
         </div>
-        <button class="btn-create" id="createTimerBtn">Create Countdown Timer</button>
         <div id="countupInputs" class="input-group" style="display: none">
           <div class="input-field">
             <label for="labelCountup">Timer Label</label>
-            <input type="text" id="labelCountup" placeholder="e.g., Cooking, Laundry, Study" />
+            <input type="text" id="labelCountup" placeholder="e.g., Stopwatch, Elapsed time" />
           </div>
+          <button class="btn-create" id="createCountupBtn">Create Counter</button>
         </div>
-        <button class="btn-create" id="createCountupBtn" style="display: none">
-          Create Count Up Timer
-        </button>
       </div>
 
-      <div class="timers-section">
-        <h2>Active Timers</h2>
-        <div id="timersContainer">No active timers</div>
-      </div>
+      <div id="timersContainer"></div>
     </div>
-
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
