@@ -637,6 +637,96 @@ p {
   font-size: 1.1em;
 }
 
+/* Screen Wake Lock Section */
+.screen-wake-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.toggle-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.toggle-label {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.toggle-checkbox {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s ease;
+  border-radius: 34px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.3s ease;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-checkbox:checked + .toggle-slider {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.toggle-checkbox:checked + .toggle-slider:before {
+  transform: translateX(26px);
+}
+
+.toggle-checkbox:focus + .toggle-slider {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.toggle-text {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #333;
+}
+
+.wake-lock-status {
+  font-size: 0.85em;
+  color: #666;
+  margin: 0;
+  padding: 8px;
+  min-height: 24px;
+}
+
+.wake-lock-status.success {
+  color: #2e7d32;
+}
+
+.wake-lock-status.error {
+  color: #d97706;
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 20px;
@@ -666,5 +756,10 @@ p {
 
   .sync-config-form {
     grid-template-columns: 1fr;
+  }
+
+  .toggle-wrapper {
+    flex-direction: column;
+    gap: 12px;
   }
 }

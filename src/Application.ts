@@ -8,8 +8,10 @@ import { TimerService } from "./services/TimerService"
 import { AudioService } from "./services/AudioService"
 import { StorageService } from "./services/StorageService"
 import { DashboardService } from "./services/DashboardService"
+import { ScreenWakeLockService } from "./services/ScreenWakeLockService"
 import { UIRenderer } from "./ui/UIRenderer"
 import { FormHandler } from "./ui/FormHandler"
+import { ScreenWakeLockUIController } from "./ui/ScreenWakeLockUIController"
 import { ManifestRepository } from "./services/ManifestRepository"
 import { SyncUIHandler } from "./ui/SyncUIHandler"
 import type {
@@ -25,10 +27,13 @@ import type {
 export class Application implements IDashboardObserver, ITimerObserver {
   private timerService: ITimerService
   private dashboardService: IDashboardService
+  private screenWakeLockService: ScreenWakeLockService
   private uiRenderer: UIRenderer
   private formHandler: FormHandler
+  private screenWakeLockUIController: ScreenWakeLockUIController | null = null
   private manifestRepository: ManifestRepository
   private syncUIHandler: SyncUIHandler
+  private wakeLockDesired: boolean = false
 
   constructor() {
     const audioService = new AudioService()
@@ -36,6 +41,7 @@ export class Application implements IDashboardObserver, ITimerObserver {
 
     this.timerService = new TimerService(audioService, storageService)
     this.dashboardService = new DashboardService(storageService)
+    this.screenWakeLockService = new ScreenWakeLockService()
     this.uiRenderer = new UIRenderer(this.timerService)
     this.formHandler = new FormHandler(this.timerService, this.dashboardService)
     this.manifestRepository = new ManifestRepository()
@@ -47,27 +53,75 @@ export class Application implements IDashboardObserver, ITimerObserver {
     this.dashboardService.subscribe(this)
   }
 
-  initialize(): void {
+  async initialize(): Promise<void> {
+    this.initializeScreenWakeLock()
     this.setupSyncUI()
     this.renderUI()
     this.formHandler.updateTimerButtonStates()
     this.exposePublicAPI()
+    this.setupVisibilityChangeHandler()
+  }
+
+  private initializeScreenWakeLock(): void {
+    try {
+      this.screenWakeLockUIController = new ScreenWakeLockUIController(
+        this.screenWakeLockService,
+        (desired: boolean) => {
+          this.wakeLockDesired = desired
+        },
+        () => this.handleWakeLockReleased(),
+      )
+      this.screenWakeLockUIController.initialize()
+    } catch (err) {
+      console.log("Screen wake lock UI not available:", err)
+    }
+  }
+
+  private async handleWakeLockReleased(): Promise<void> {
+    alert("handleWakeLockReleased called. wakeLockDesired=" + this.wakeLockDesired + ", hidden=" + document.hidden)
+    if (this.wakeLockDesired && !document.hidden) {
+      try {
+        alert("Trying to re-acquire...")
+        await this.screenWakeLockService.acquire()
+        alert("Re-acquire succeeded!")
+        if (this.screenWakeLockUIController) {
+          this.screenWakeLockUIController.updateStatus(true)
+        }
+      } catch (err) {
+        alert("Re-acquire FAILED: " + (err instanceof Error ? err.message : String(err)))
+        console.error("Failed to re-acquire wake lock:", err)
+      }
+    } else {
+      alert("Not re-acquiring because wakeLockDesired=" + this.wakeLockDesired + " or document.hidden=" + document.hidden)
+    }
+  }
+
+  private setupVisibilityChangeHandler(): void {
+    document.addEventListener("visibilitychange", async () => {
+      if (!document.hidden && this.wakeLockDesired && !this.screenWakeLockService.isActive()) {
+        try {
+          await this.screenWakeLockService.acquire()
+          if (this.screenWakeLockUIController) {
+            this.screenWakeLockUIController.updateStatus(true)
+          }
+        } catch (err) {
+          console.error("Failed to re-acquire wake lock:", err)
+        }
+      }
+    })
   }
 
   private setupSyncUI(): void {
-    // Render sync configuration section
     const configHtml = this.syncUIHandler.renderConfigSection()
     const container = document.getElementById("githubConfigContainer")
     if (container) {
       container.innerHTML = configHtml
     }
 
-    // Attach event listeners after a short delay to ensure DOM is ready
     setTimeout(() => {
       this.syncUIHandler.attachEventListeners(
         async (url: string) => {
           console.log("Manifest URL saved:", url)
-          // Try to auto-fetch after saving
           try {
             await this.loadFromRemote()
           } catch (e) {
@@ -99,16 +153,13 @@ export class Application implements IDashboardObserver, ITimerObserver {
   }
 
   private loadDashboardsFromManifest(manifest: any): void {
-    // Clear existing dashboards
     this.dashboardService.getAllDashboards().forEach((dashboard) => {
       this.dashboardService.deleteDashboard(dashboard.id)
     })
 
-    // Create dashboards from manifest
     for (const dashboardData of manifest.dashboards) {
       const dashboard = this.dashboardService.createDashboard(dashboardData.name)
 
-      // Create timers from manifest
       for (const timerData of dashboardData.timers) {
         if (timerData.type === "countdown") {
           const timer = this.timerService.createCountdownTimer(
@@ -153,74 +204,45 @@ export class Application implements IDashboardObserver, ITimerObserver {
 
           return timerObj
         })
-        .filter(Boolean),
+        .filter((timer) => timer !== null),
     }))
 
-    const json = this.manifestRepository.exportAsJson(dashboardsArray)
-    const timestamp = new Date().toISOString().split("T")[0]
-    this.manifestRepository.downloadManifest(json, `dashboards-${timestamp}.json`)
+    const manifest = {
+      version: "1.0.0",
+      exportedAt: new Date().toISOString(),
+      dashboards: dashboardsArray,
+    }
+
+    const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `particularparrot-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   private async importDashboards(file: File): Promise<void> {
-    const manifest = await this.manifestRepository.importFromFile(file)
-    this.loadDashboardsFromManifest(manifest)
-    this.renderUI()
+    try {
+      const text = await file.text()
+      const manifest = JSON.parse(text)
+      this.loadDashboardsFromManifest(manifest)
+      this.renderUI()
+    } catch (error) {
+      console.error("Failed to import dashboards:", error)
+      throw error
+    }
   }
 
   private renderUI(): void {
     const dashboards = this.dashboardService.getAllDashboards()
     const currentDashboard = this.dashboardService.getCurrentDashboard()
-    const allTimers = this.timerService.getAllTimers()
-    this.uiRenderer.render(dashboards, currentDashboard, allTimers)
+    const timers = this.timerService.getAllTimers()
+    this.uiRenderer.render(dashboards, currentDashboard, timers)
   }
 
   private exposePublicAPI(): void {
-    ;(window as any).app = {
-      startTimer: (id: number) => {
-        this.timerService.startTimer(id)
-        this.renderUI()
-      },
-      pauseTimer: (id: number) => {
-        this.timerService.pauseTimer(id)
-        this.renderUI()
-      },
-      deleteTimer: (id: number) => {
-        this.timerService.deleteTimer(id)
-        const currentDashboard = this.dashboardService.getCurrentDashboard()
-        if (currentDashboard) {
-          this.dashboardService.removeTimerFromDashboard(currentDashboard.id, id)
-        }
-        this.renderUI()
-      },
-      resetCountdownTimer: (id: number) => {
-        this.timerService.resetCountdownTimer(id)
-        this.renderUI()
-      },
-      resetCountupTimer: (id: number) => {
-        this.timerService.resetCountupTimer(id)
-        this.renderUI()
-      },
-      acknowledgeTimer: (id: number) => {
-        this.timerService.acknowledgeTimer(id)
-        this.renderUI()
-      },
-      stopAlert: (id: number) => {
-        this.timerService.stopAlert(id)
-        this.renderUI()
-      },
-      setPreset: (minutes: number) => this.formHandler.setPreset(minutes),
-      setMode: (mode: "countdown" | "countup") => this.formHandler.setMode(mode),
-      selectDashboard: (id: string) => {
-        this.formHandler.selectDashboard(id)
-        this.renderUI()
-        this.formHandler.updateTimerButtonStates()
-      },
-      deleteDashboard: (id: string) => {
-        this.dashboardService.deleteDashboard(id)
-        this.renderUI()
-        this.formHandler.updateTimerButtonStates()
-      },
-    }
+    ;(window as any).app = this
   }
 
   onTimerUpdated(_timer: TimerState): void {
@@ -252,5 +274,41 @@ export class Application implements IDashboardObserver, ITimerObserver {
   onDashboardSelected(_dashboard: IDashboard): void {
     this.renderUI()
     this.formHandler.updateTimerButtonStates()
+  }
+
+  startTimer(id: number): void {
+    this.timerService.startTimer(id)
+  }
+
+  pauseTimer(id: number): void {
+    this.timerService.pauseTimer(id)
+  }
+
+  deleteTimer(id: number): void {
+    this.timerService.deleteTimer(id)
+  }
+
+  resetCountdownTimer(id: number): void {
+    this.timerService.resetCountdownTimer(id)
+  }
+
+  resetCountupTimer(id: number): void {
+    this.timerService.resetCountupTimer(id)
+  }
+
+  acknowledgeTimer(id: number): void {
+    this.timerService.acknowledgeTimer(id)
+  }
+
+  stopAlert(id: number): void {
+    this.timerService.stopAlert(id)
+  }
+
+  selectDashboard(dashboardId: string): void {
+    this.dashboardService.selectDashboard(dashboardId)
+  }
+
+  deleteDashboard(dashboardId: string): void {
+    this.dashboardService.deleteDashboard(dashboardId)
   }
 }
